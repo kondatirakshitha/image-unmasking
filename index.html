@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Image Unmasking | Authenticity Analysis</title>
+  <style>
+    :root { --navy:#0b132b; --ink:#17223b; --muted:#68738a; --line:#dce2ed; --paper:#f6f8fc; --white:#fff; --blue:#375dfb; --purple:#794cff; --green:#16856b; --red:#b9385d; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:var(--paper); font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+    header { background:var(--navy); color:#fff; }
+    .nav, main { width:min(1100px, calc(100% - 40px)); margin:auto; }
+    .nav { min-height:72px; display:flex; align-items:center; justify-content:space-between; }
+    .brand { font-size:1.08rem; font-weight:750; letter-spacing:.01em; display:flex; align-items:center; gap:10px; }
+    .brand-mark { display:grid; place-items:center; width:32px; height:32px; border-radius:9px; background:linear-gradient(135deg,var(--blue),var(--purple)); }
+    .status { color:#c9d4f0; font-size:.88rem; }
+    .account { display:flex; align-items:center; gap:14px; color:#dce6ff; font-size:.88rem; }
+    .account a { color:white; text-decoration:none; font-weight:700; }
+    .account button { border:0; background:transparent; color:white; font:inherit; font-weight:700; cursor:pointer; padding:0; }
+    main { padding:64px 0; }
+    .eyebrow { color:var(--blue); font-size:.78rem; font-weight:750; letter-spacing:.12em; text-transform:uppercase; }
+    h1 { max-width:700px; margin:12px 0; font-size:clamp(2.2rem,5vw,4.4rem); line-height:1.05; letter-spacing:-.045em; }
+    .intro { max-width:620px; color:var(--muted); font-size:1.12rem; }
+    .workspace { display:grid; grid-template-columns:1.35fr .85fr; gap:24px; margin-top:44px; align-items:start; }
+    .panel { background:var(--white); border:1px solid var(--line); border-radius:18px; padding:28px; box-shadow:0 12px 30px rgba(18,35,75,.06); }
+    .drop-zone { display:grid; place-items:center; min-height:270px; text-align:center; border:2px dashed #b9c6e2; border-radius:14px; cursor:pointer; transition:.2s; }
+    .drop-zone:hover, .drop-zone.drag { border-color:var(--blue); background:#f6f8ff; }
+    .upload-icon { font-size:2.4rem; margin-bottom:8px; }
+    .drop-zone h2 { margin:0; font-size:1.18rem; }
+    .drop-zone p { color:var(--muted); margin:6px 0 17px; font-size:.9rem; }
+    input[type=file] { display:none; }
+    .button { appearance:none; border:0; border-radius:9px; background:var(--blue); color:white; padding:11px 17px; font:inherit; font-weight:700; cursor:pointer; }
+    .button:hover { background:#244ae4; }
+    .button:disabled { opacity:.55; cursor:wait; }
+    .file-name { min-height:24px; margin:14px 0 0; color:var(--muted); font-size:.9rem; text-align:center; overflow-wrap:anywhere; }
+    .analyse { width:100%; margin-top:18px; }
+    .side-title { margin:0 0 18px; font-size:1.05rem; }
+    .step { display:flex; gap:13px; padding:15px 0; border-bottom:1px solid var(--line); }
+    .step:last-child { border:0; }
+    .number { display:grid; flex:0 0 26px; place-items:center; height:26px; border-radius:50%; background:#edf1ff; color:var(--blue); font-size:.78rem; font-weight:750; }
+    .step strong, .step p { display:block; }
+    .step p { margin:2px 0 0; color:var(--muted); font-size:.88rem; }
+    .result { display:none; margin-top:24px; }
+    .result.show { display:block; }
+    .result-top { display:flex; justify-content:space-between; gap:16px; align-items:start; }
+    .result-label { margin:0; color:var(--muted); font-size:.84rem; }
+    .verdict { margin:2px 0 0; font-size:1.5rem; letter-spacing:-.03em; }
+    .confidence { text-align:right; }
+    .confidence b { display:block; font-size:1.35rem; color:var(--green); }
+    .metric { display:flex; justify-content:space-between; margin-top:20px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:.9rem; }
+    .error { display:none; margin-top:18px; padding:12px; border-radius:9px; color:#8a2344; background:#fff0f4; font-size:.92rem; }
+    .error.show { display:block; }
+    .preview { display:none; width:100%; height:190px; object-fit:contain; margin:0 0 18px; border:1px solid var(--line); border-radius:12px; background:#f4f7fc; }
+    .preview.show { display:block; }
+    .meter { margin-top:20px; padding:18px; border:1px solid var(--line); border-radius:12px; background:#f8faff; }
+    .meter-top { display:flex; justify-content:space-between; font-size:.86rem; color:var(--muted); }
+    .bar { height:10px; overflow:hidden; border-radius:20px; background:#e3e9f5; margin:9px 0 4px; }
+    .bar span { display:block; height:100%; width:0; border-radius:inherit; background:linear-gradient(90deg,var(--blue),var(--purple)); transition:width .6s ease; }
+    .detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+    .detail { padding:12px; border-radius:10px; background:#f6f8fc; color:var(--muted); font-size:.78rem; }
+    .detail strong { display:block; margin-top:2px; color:var(--ink); font-size:.95rem; }
+    .batch { margin-top:24px; padding-top:22px; border-top:1px solid var(--line); }
+    .batch h2 { margin:0; font-size:1rem; }.batch p{color:var(--muted);font-size:.88rem;margin:4px 0 14px}
+    .folder-input { display:none; }.batch-results{display:none;margin-top:16px}.batch-results.show{display:block}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}.summary div{padding:10px;background:#f6f8fc;border-radius:8px;font-size:.82rem;color:var(--muted)}.summary strong{display:block;color:var(--ink);font-size:1.1rem}.batch-table{width:100%;border-collapse:collapse;font-size:.83rem}.batch-table td,.batch-table th{padding:8px;border-bottom:1px solid var(--line);text-align:left}.batch-table th{color:var(--muted)}
+    footer { width:min(1100px, calc(100% - 40px)); margin:0 auto 28px; color:var(--muted); font-size:.82rem; }
+    @media (max-width:760px) { main { padding:42px 0; } .workspace { grid-template-columns:1fr; } .panel { padding:20px; } .nav { min-height:62px; } .status { display:none; } }
+  </style>
+</head>
+<body>
+  <header><div class="nav"><div class="brand"><span class="brand-mark">◈</span>Image Unmasking</div><div class="account">{% if current_username %}<span>Hi, {{ current_username }}</span><a href="{{ url_for('history') }}">History</a><form method="post" action="{{ url_for('logout') }}"><button type="submit">Log out</button></form>{% else %}<a href="{{ url_for('login') }}">Sign in</a><a href="{{ url_for('signup') }}">Create account</a>{% endif %}</div></div></header>
+  <main>
+    <div class="eyebrow">AI-image detection</div>
+    <h1>See beyond the pixels.</h1>
+    <p class="intro">Upload an image to estimate whether it is likely real or AI-generated/manipulated. Sign in to analyse images and keep a private scan history.</p>
+    <div class="workspace">
+      <section class="panel" aria-labelledby="upload-title">
+        <form id="upload-form">
+          <img id="preview" class="preview" alt="Selected image preview">
+          <label class="drop-zone" id="drop-zone" for="image">
+            <span><div class="upload-icon">⌁</div><h2 id="upload-title">Drop your image here</h2><p>JPG, PNG or WebP · maximum 10 MB</p><span class="button">Choose image</span></span>
+            <input id="image" type="file" name="image" accept="image/jpeg,image/png,image/webp" required>
+          </label>
+          <p class="file-name" id="file-name">No file selected</p>
+          <button class="button analyse" id="submit-button" type="submit">Analyse image</button>
+        </form>
+        <div class="error" id="error" role="alert"></div>
+        <div class="result panel" id="result" aria-live="polite">
+          <div class="result-top"><div><p class="result-label">Analysis result</p><h2 class="verdict" id="verdict">—</h2></div><div class="confidence"><p class="result-label">Confidence</p><b id="confidence">—</b></div></div>
+          <div class="metric"><span>AI-generated/manipulated likelihood</span><strong id="ai-score">—</strong></div>
+          <div class="metric"><span>Likely real likelihood</span><strong id="real-score">—</strong></div>
+          <div class="meter"><div class="meter-top"><span>AI/manipulated likelihood</span><strong id="meter-value">—</strong></div><div class="bar"><span id="meter-fill"></span></div></div>
+          <div class="detail-grid"><div class="detail">Image size<strong id="dimensions">—</strong></div><div class="detail">Metadata<strong id="metadata">—</strong></div></div>
+        </div>
+        <section class="batch"><h2>Analyse a folder</h2><p>Choose up to 20 images. Each image uses one API analysis and is saved to your history.</p><form id="batch-form"><label class="button" for="folder-input">Choose folder</label><input class="folder-input" id="folder-input" type="file" name="images" webkitdirectory directory multiple accept="image/jpeg,image/png,image/webp"><p class="file-name" id="folder-name">No folder selected</p><button class="button analyse" id="batch-submit" type="submit">Analyse folder</button></form><div class="error" id="batch-error" role="alert"></div><div class="batch-results" id="batch-results"><h2>Batch summary</h2><div class="summary"><div>AI / edited<strong id="batch-ai">0</strong></div><div>Likely real<strong id="batch-real">0</strong></div><div>Inconclusive<strong id="batch-inc">0</strong></div></div><table class="batch-table"><thead><tr><th>Image</th><th>Result</th><th>AI score</th></tr></thead><tbody id="batch-rows"></tbody></table></div></section>
+      </section>
+      <aside class="panel"><h2 class="side-title">Analysis engine</h2><div class="step"><span class="number">1</span><div><strong>Secure upload</strong><p>Your image is analysed and deleted from the server after the result is returned.</p></div></div><div class="step"><span class="number">2</span><div><strong>Vision model</strong><p>A trained image-classification model compares visual patterns.</p></div></div><div class="step"><span class="number">3</span><div><strong>Result guide</strong><p>Check both likelihood scores and use the result as a clue—not proof.</p></div></div></aside>
+    </div>
+  </main>
+  <footer>Results are estimates from a trained model, not forensic proof. Do not use them as the only basis for important decisions.</footer>
+  <script>
+    const form = document.querySelector('#upload-form'), input = document.querySelector('#image'), name = document.querySelector('#file-name'), zone = document.querySelector('#drop-zone'), submit = document.querySelector('#submit-button'), error = document.querySelector('#error'), result = document.querySelector('#result'), preview = document.querySelector('#preview');
+    const choose = file => { if (file) { name.textContent = file.name; preview.src = URL.createObjectURL(file); preview.classList.add('show'); } };
+    input.addEventListener('change', () => choose(input.files[0]));
+    ['dragenter','dragover'].forEach(event => zone.addEventListener(event, e => { e.preventDefault(); zone.classList.add('drag'); }));
+    ['dragleave','drop'].forEach(event => zone.addEventListener(event, e => { e.preventDefault(); zone.classList.remove('drag'); }));
+    zone.addEventListener('drop', e => { input.files = e.dataTransfer.files; choose(input.files[0]); });
+    form.addEventListener('submit', async event => {
+      event.preventDefault(); error.classList.remove('show'); result.classList.remove('show');
+      if (!input.files[0]) { error.textContent = 'Choose an image first.'; error.classList.add('show'); return; }
+      submit.disabled = true; submit.textContent = 'Analysing…';
+      try {
+        const response = await fetch('/upload', { method:'POST', body:new FormData(form) });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Analysis could not be completed.');
+        document.querySelector('#verdict').textContent = data.result;
+        document.querySelector('#confidence').textContent = data.confidence == null ? 'Unavailable' : data.confidence + '%';
+        document.querySelector('#ai-score').textContent = data.ai_score + '%';
+        document.querySelector('#real-score').textContent = data.real_score + '%';
+        document.querySelector('#meter-value').textContent = data.ai_score + '%';
+        document.querySelector('#meter-fill').style.width = data.ai_score + '%';
+        document.querySelector('#dimensions').textContent = data.image_size.width + ' × ' + data.image_size.height;
+        document.querySelector('#metadata').textContent = data.metadata_present ? 'Found' : 'Not found';
+        result.classList.add('show');
+      } catch (problem) { error.textContent = problem.message; error.classList.add('show'); }
+      finally { submit.disabled = false; submit.textContent = 'Analyse image'; }
+    });
+    const batchForm=document.querySelector('#batch-form'), folderInput=document.querySelector('#folder-input'), folderName=document.querySelector('#folder-name'), batchError=document.querySelector('#batch-error'), batchResults=document.querySelector('#batch-results'), batchSubmit=document.querySelector('#batch-submit');
+    folderInput.addEventListener('change',()=>{folderName.textContent=folderInput.files.length ? folderInput.files.length+' image(s) selected' : 'No folder selected';});
+    batchForm.addEventListener('submit',async event=>{event.preventDefault();batchError.classList.remove('show');batchResults.classList.remove('show');if(!folderInput.files.length){batchError.textContent='Choose a folder first.';batchError.classList.add('show');return;}batchSubmit.disabled=true;batchSubmit.textContent='Analysing folder…';try{const response=await fetch('/batch-upload',{method:'POST',body:new FormData(batchForm)});const data=await response.json();if(!response.ok)throw new Error(data.error||'Folder analysis could not be completed.');document.querySelector('#batch-ai').textContent=data.summary.ai;document.querySelector('#batch-real').textContent=data.summary.real;document.querySelector('#batch-inc').textContent=data.summary.inconclusive;document.querySelector('#batch-rows').innerHTML=data.results.map(row=>'<tr><td>'+row.filename+'</td><td>'+row.result+'</td><td>'+row.ai_score+'%</td></tr>').join('');if(data.errors.length){batchError.textContent=data.errors.length+' image(s) could not be analysed.';batchError.classList.add('show');}batchResults.classList.add('show');}catch(problem){batchError.textContent=problem.message;batchError.classList.add('show');}finally{batchSubmit.disabled=false;batchSubmit.textContent='Analyse folder';}});
+  </script>
+</body>
+</html>

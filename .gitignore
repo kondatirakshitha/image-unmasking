@@ -1,0 +1,6 @@
+.env
+truthlens.db
+uploads/
+__pycache__/
+*.py[cod]
+.venv/
