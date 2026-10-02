@@ -1,6 +1,8 @@
 """Image-authenticity Flask app, ready for local use or cloud deployment."""
 import os
 import sqlite3
+import psycopg
+from psycopg.rows import dict_row
 import uuid
 from datetime import datetime, timezone
 from functools import wraps
@@ -16,6 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 DATABASE_PATH = BASE_DIR / "truthlens.db"
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 app = Flask(__name__, template_folder=str(BASE_DIR))
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
@@ -26,9 +29,17 @@ ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
 
 def get_db():
     if "db" not in g:
-        g.db = sqlite3.connect(DATABASE_PATH)
-        g.db.row_factory = sqlite3.Row
+        if DATABASE_URL:
+            g.db = psycopg.connect(DATABASE_URL, row_factory=dict_row)
+        else:
+            g.db = sqlite3.connect(DATABASE_PATH)
+            g.db.row_factory = sqlite3.Row
     return g.db
+
+
+def db_sql(query):
+    """Use SQLite locally and PostgreSQL in production."""
+    return query.replace("?", "%s") if DATABASE_URL else query
 
 
 @app.teardown_appcontext
@@ -39,28 +50,52 @@ def close_db(_error):
 
 
 def initialise_database():
-    connection = sqlite3.connect(DATABASE_PATH)
-    connection.executescript("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            password_hash TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS scans (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            image_name TEXT NOT NULL,
-            result TEXT NOT NULL,
-            confidence REAL NOT NULL,
-            ai_score REAL NOT NULL,
-            real_score REAL NOT NULL,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        );
-    """)
-    connection.commit()
-    connection.close()
+    if DATABASE_URL:
+        connection = psycopg.connect(DATABASE_URL)
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    username TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS scans (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    image_name TEXT NOT NULL,
+                    result TEXT NOT NULL,
+                    confidence DOUBLE PRECISION NOT NULL,
+                    ai_score DOUBLE PRECISION NOT NULL,
+                    real_score DOUBLE PRECISION NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+            """)
+        connection.commit()
+        connection.close()
+    else:
+        connection = sqlite3.connect(DATABASE_PATH)
+        connection.executescript("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS scans (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                image_name TEXT NOT NULL,
+                result TEXT NOT NULL,
+                confidence REAL NOT NULL,
+                ai_score REAL NOT NULL,
+                real_score REAL NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            );
+        """)
+        connection.commit()
+        connection.close()
 
 
 def login_required(view):
@@ -137,17 +172,17 @@ def signup():
             try:
                 db = get_db()
                 db.execute(
-                    "INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)",
+                    db_sql("INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)"),
                     (username, generate_password_hash(password), datetime.now(timezone.utc).isoformat()),
                 )
                 db.commit()
                 user = db.execute(
-                    "SELECT id, username FROM users WHERE username = ?", (username,)
+                    db_sql("SELECT id, username FROM users WHERE username = ?"), (username,)
                 ).fetchone()
                 session.clear()
                 session["user_id"], session["username"] = user["id"], user["username"]
                 return redirect(url_for("home"))
-            except sqlite3.IntegrityError:
+            except (sqlite3.IntegrityError, psycopg.IntegrityError):
                 flash("That username is already in use.")
     return render_template("signup.html")
 
@@ -157,7 +192,7 @@ def login():
     if request.method == "POST":
         username = request.form.get("username", "").strip().lower()
         user = get_db().execute(
-            "SELECT * FROM users WHERE username = ?", (username,)
+            db_sql("SELECT * FROM users WHERE username = ?"), (username,)
         ).fetchone()
         if user is None or not check_password_hash(
             user["password_hash"], request.form.get("password", "")
@@ -216,8 +251,8 @@ def upload_image():
 
     db = get_db()
     db.execute(
-        "INSERT INTO scans (user_id, image_name, result, confidence, ai_score, real_score, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        db_sql("INSERT INTO scans (user_id, image_name, result, confidence, ai_score, real_score, created_at) "
+               "VALUES (?, ?, ?, ?, ?, ?, ?)"),
         (
             session["user_id"], original_name, result, confidence, ai_score, real_score,
             datetime.now(timezone.utc).strftime("%d %b %Y, %H:%M UTC"),
@@ -261,8 +296,8 @@ def batch_upload():
                 image.verify()
             result, confidence, ai_score, real_score = classify_image(save_path)
             db.execute(
-                "INSERT INTO scans (user_id, image_name, result, confidence, ai_score, real_score, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                db_sql("INSERT INTO scans (user_id, image_name, result, confidence, ai_score, real_score, created_at) "
+                       "VALUES (?, ?, ?, ?, ?, ?, ?)"),
                 (
                     session["user_id"], original_name, result, confidence, ai_score, real_score,
                     datetime.now(timezone.utc).strftime("%d %b %Y, %H:%M UTC"),
