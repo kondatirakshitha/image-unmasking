@@ -13,3 +13,5 @@ services:
         sync: false
       - key: SIGHTENGINE_API_SECRET
         sync: false
+      - key: DATABASE_URL
+        sync: false
