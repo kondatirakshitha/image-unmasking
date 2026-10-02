@@ -17,7 +17,10 @@ UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 DATABASE_PATH = BASE_DIR / "truthlens.db"
 
-app = Flask(__name__)
+# The HTML templates are stored in the repository root.
+# Flask normally looks for a "templates" directory, so explicitly point
+# the template loader at BASE_DIR.
+app = Flask(__name__, template_folder=str(BASE_DIR))
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB total batch limit
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "change-this-before-public-deployment")
 
@@ -94,9 +97,12 @@ def classify_image(img_path):
         raise RuntimeError("Sightengine credentials are not configured yet.")
     try:
         with open(img_path, "rb") as media:
-            response = requests.post("https://api.sightengine.com/1.0/check.json",
+            response = requests.post(
+                "https://api.sightengine.com/1.0/check.json",
                 data={"models": "genai", "api_user": api_user, "api_secret": api_secret},
-                files={"media": (img_path.name, media, "application/octet-stream")}, timeout=45)
+                files={"media": (img_path.name, media, "application/octet-stream")},
+                timeout=45,
+            )
         data = response.json()
     except (requests.RequestException, ValueError) as error:
         raise RuntimeError("Could not contact Sightengine. Check your internet connection.") from error
@@ -131,10 +137,14 @@ def signup():
         else:
             try:
                 db = get_db()
-                db.execute("INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)",
-                           (username, generate_password_hash(password), datetime.now(timezone.utc).isoformat()))
+                db.execute(
+                    "INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)",
+                    (username, generate_password_hash(password), datetime.now(timezone.utc).isoformat()),
+                )
                 db.commit()
-                user = db.execute("SELECT id, username FROM users WHERE username = ?", (username,)).fetchone()
+                user = db.execute(
+                    "SELECT id, username FROM users WHERE username = ?", (username,)
+                ).fetchone()
                 session.clear()
                 session["user_id"], session["username"] = user["id"], user["username"]
                 return redirect(url_for("home"))
@@ -147,8 +157,12 @@ def signup():
 def login():
     if request.method == "POST":
         username = request.form.get("username", "").strip().lower()
-        user = get_db().execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
-        if user is None or not check_password_hash(user["password_hash"], request.form.get("password", "")):
+        user = get_db().execute(
+            "SELECT * FROM users WHERE username = ?", (username,)
+        ).fetchone()
+        if user is None or not check_password_hash(
+            user["password_hash"], request.form.get("password", "")
+        ):
             flash("Incorrect username or password.")
         else:
             session.clear()
@@ -168,7 +182,8 @@ def logout():
 def history():
     rows = get_db().execute(
         "SELECT image_name, result, confidence, ai_score, real_score, created_at FROM scans "
-        "WHERE user_id = ? ORDER BY id DESC LIMIT 50", (session["user_id"],)
+        "WHERE user_id = ? ORDER BY id DESC LIMIT 50",
+        (session["user_id"],),
     ).fetchall()
     return render_template("history.html", scans=rows)
 
@@ -189,8 +204,6 @@ def upload_image():
     try:
         with Image.open(save_path) as image:
             image.verify()
-        # verify() invalidates the Pillow image object, so open it again before
-        # reading dimensions and metadata.
         with Image.open(save_path) as image:
             width, height = image.size
             metadata_present = bool(image.getexif())
@@ -206,16 +219,23 @@ def upload_image():
     db.execute(
         "INSERT INTO scans (user_id, image_name, result, confidence, ai_score, real_score, created_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (session["user_id"], original_name, result, confidence, ai_score, real_score,
-         datetime.now(timezone.utc).strftime("%d %b %Y, %H:%M UTC")),
+        (
+            session["user_id"], original_name, result, confidence, ai_score, real_score,
+            datetime.now(timezone.utc).strftime("%d %b %Y, %H:%M UTC"),
+        ),
     )
     db.commit()
 
-    return jsonify(filename=original_name, result=result, confidence=confidence,
-                   ai_score=ai_score, real_score=real_score,
-                   image_size={"width": width, "height": height},
-                   metadata_present=metadata_present,
-                   notice="Powered by Sightengine. Scores between 20% and 80% are shown as inconclusive.")
+    return jsonify(
+        filename=original_name,
+        result=result,
+        confidence=confidence,
+        ai_score=ai_score,
+        real_score=real_score,
+        image_size={"width": width, "height": height},
+        metadata_present=metadata_present,
+        notice="Powered by Sightengine. Scores between 20% and 80% are shown as inconclusive.",
+    )
 
 
 @app.route("/batch-upload", methods=["POST"])
@@ -244,11 +264,18 @@ def batch_upload():
             db.execute(
                 "INSERT INTO scans (user_id, image_name, result, confidence, ai_score, real_score, created_at) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (session["user_id"], original_name, result, confidence, ai_score, real_score,
-                 datetime.now(timezone.utc).strftime("%d %b %Y, %H:%M UTC")),
+                (
+                    session["user_id"], original_name, result, confidence, ai_score, real_score,
+                    datetime.now(timezone.utc).strftime("%d %b %Y, %H:%M UTC"),
+                ),
             )
-            rows.append({"filename": original_name, "result": result, "confidence": confidence,
-                         "ai_score": ai_score, "real_score": real_score})
+            rows.append({
+                "filename": original_name,
+                "result": result,
+                "confidence": confidence,
+                "ai_score": ai_score,
+                "real_score": real_score,
+            })
         except (UnidentifiedImageError, OSError, ValueError, RuntimeError) as error:
             errors.append({"filename": original_name, "error": str(error)})
         finally:
