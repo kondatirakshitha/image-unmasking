@@ -17,11 +17,8 @@ UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 DATABASE_PATH = BASE_DIR / "truthlens.db"
 
-# The HTML templates are stored in the repository root.
-# Flask normally looks for a "templates" directory, so explicitly point
-# the template loader at BASE_DIR.
 app = Flask(__name__, template_folder=str(BASE_DIR))
-app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB total batch limit
+app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "change-this-before-public-deployment")
 
 ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
@@ -130,8 +127,10 @@ def signup():
     if request.method == "POST":
         username = request.form.get("username", "").strip().lower()
         password = request.form.get("password", "")
-        if len(username) < 3 or not username.replace("_", "").isalnum():
-            flash("Use at least 3 letters, numbers, or underscores for your username.")
+
+        # Username can be any non-empty text.
+        if not username:
+            flash("Please enter a username.")
         elif len(password) < 8:
             flash("Use a password with at least 8 characters.")
         else:
@@ -298,5 +297,4 @@ def file_too_large(_error):
 
 
 if __name__ == "__main__":
-    # debug must remain off when deployed publicly.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=False)
