@@ -215,8 +215,8 @@ def logout():
 @login_required
 def history():
     rows = get_db().execute(
-        "SELECT image_name, result, confidence, ai_score, real_score, created_at FROM scans "
-        "WHERE user_id = ? ORDER BY id DESC LIMIT 50",
+        db_sql("SELECT image_name, result, confidence, ai_score, real_score, created_at FROM scans "
+               "WHERE user_id = ? ORDER BY id DESC LIMIT 50"),
         (session["user_id"],),
     ).fetchall()
     return render_template("history.html", scans=rows)
