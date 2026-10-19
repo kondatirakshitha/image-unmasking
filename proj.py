@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
 
-from flask import Flask, flash, g, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, Response, flash, g, jsonify, redirect, render_template, request, session, url_for
 from PIL import Image, UnidentifiedImageError
 import requests
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -155,6 +155,25 @@ def classify_image(img_path):
 @app.route("/")
 def home():
     return render_template("index.html")
+
+
+@app.get("/robots.txt")
+def robots_txt():
+    sitemap_url = url_for("sitemap_xml", _external=True)
+    content = f"User-agent: *\\nAllow: /\\nDisallow: /history\\nSitemap: {sitemap_url}\\n"
+    return Response(content, mimetype="text/plain")
+
+
+@app.get("/sitemap.xml")
+def sitemap_xml():
+    home_url = url_for("home", _external=True)
+    content = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        f"<url><loc>{home_url}</loc></url>"
+        "</urlset>"
+    )
+    return Response(content, mimetype="application/xml")
 
 
 @app.route("/signup", methods=["GET", "POST"])
