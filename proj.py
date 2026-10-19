@@ -160,7 +160,7 @@ def home():
 @app.get("/robots.txt")
 def robots_txt():
     sitemap_url = url_for("sitemap_xml", _external=True)
-    content = f"User-agent: *\\nAllow: /\\nDisallow: /history\\nSitemap: {sitemap_url}\\n"
+    content = f"User-agent: *\nAllow: /\nDisallow: /history\nSitemap: {sitemap_url}\n"
     return Response(content, mimetype="text/plain")
 
 
